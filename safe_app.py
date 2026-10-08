@@ -3,8 +3,9 @@ import os
 import ipaddress
 from urllib.parse import urlparse
 import requests
+import hmac
 from datetime import datetime, timezone
-from flask import Flask, jsonify, Response
+from flask import Flask, jsonify, Response, request
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
@@ -76,6 +77,48 @@ def availability():
         return jsonify(success=False, code="connection_error",
                        message="Rəsmi API-dən etibarlı cavab alınmadı.", ranges=[]), 502
 
+def authorize_private_api():
+    """Use a separate API key, never browser cookies or upstream credentials."""
+    expected = os.environ.get("IVAS_PRIVATE_API_KEY", "").strip()
+    if not expected:
+        return jsonify(success=False, error="private_api_not_configured"), 503
+    supplied = request.headers.get("X-API-Key", "").strip()
+    authorization = request.headers.get("Authorization", "")
+    if not supplied and authorization.startswith("Bearer "):
+        supplied = authorization[7:].strip()
+    if not hmac.compare_digest(supplied, expected):
+        return jsonify(success=False, error="unauthorized"), 401
+    return None
+
+
+@app.get("/api/v1/status")
+def private_status():
+    failure = authorize_private_api()
+    if failure is not None:
+        return failure
+    return jsonify(success=True, provider="IVAS SMS", api_version="v1",
+                   online=True, official_api_configured=bool(os.environ.get("IVAS_OFFICIAL_API_TOKEN")),
+                   availability_endpoint_configured=bool(os.environ.get("IVAS_AVAILABILITY_URL")),
+                   checked_at=datetime.now(timezone.utc).isoformat())
+
+
+@app.get("/api/v1/ranges")
+def private_ranges():
+    failure = authorize_private_api()
+    if failure is not None:
+        return failure
+    return availability()
+
+
+@app.get("/api/v1")
+def private_api_docs():
+    return jsonify(name="IVAS private API", version="v1",
+                   auth="X-API-Key header or Authorization: Bearer <private-key>",
+                   routes={"GET /api/v1/status": "Status metadata (key required)",
+                           "GET /api/v1/ranges": "Country/service availability metadata (key required)"},
+                   note="Does not expose individual phone numbers, SMS messages, OTPs or cookies.")
+
+
 @app.get("/")
 def home():
     return Response("""<!DOCTYPE html>
@@ -91,7 +134,7 @@ strong{font-size:22px;display:block;padding-top:8px}.note{margin:18px 0;padding:
 button{background:#397aff;color:white;border:0;padding:12px 20px;border-radius:10px;font-weight:bold;cursor:pointer}
 @media(max-width:580px){.grid{grid-template-columns:1fr}}</style></head><body>
 <main><div class="brand"><div class="logo">📡</div><div>IVAS SMS<small style="display:block;color:#93accb;font-weight:normal">Ayrıca veb idarəetmə paneli</small></div></div>
-<h1>İdarə paneli</h1><p>Bu sayt Telegram botundan və əvvəlki LAMIX layihəsindən ayrıdır.</p>
+<h1>İdarə paneli</h1><p><a href="/api/v1" style="color:#94bdff">🔗 Şəxsi API sənədləri</a></p><p>Bu sayt Telegram botundan və əvvəlki LAMIX layihəsindən ayrıdır.</p>
 <div class="grid"><section class="card"><h2>🌐 Server</h2><strong id="server">Yoxlanılır…</strong></section>
 <section class="card"><h2>🔐 Rəsmi API konfiqurasiyası</h2><strong id="api">Yoxlanılır…</strong></section></div>
 <div class="note">Təhlükəsizlik səbəbindən bu panel SMS mətnlərini, OTP kodlarını və üçüncü tərəf sessiya kukilərini göstərmir. Rəsmi API dokumentasiyası olmadan nömrə mövcudluğu barədə məlumat uydurulmur.</div>

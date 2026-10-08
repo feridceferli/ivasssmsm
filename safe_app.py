@@ -1,5 +1,8 @@
 """Independent, safe IVAS SMS dashboard (no messages, numbers or OTP exposure)."""
 import os
+import ipaddress
+from urllib.parse import urlparse
+import requests
 from datetime import datetime, timezone
 from flask import Flask, jsonify, Response
 
@@ -17,9 +20,61 @@ def status():
         separate=True,
         provider="IVAS SMS",
         official_api_configured=bool(os.environ.get("IVAS_OFFICIAL_API_TOKEN")),
+        availability_endpoint_configured=bool(os.environ.get("IVAS_AVAILABILITY_URL")),
         sms_content_enabled=False,
         checked_at=datetime.now(timezone.utc).isoformat(),
     )
+
+@app.get("/api/availability")
+def availability():
+    """Only country/range aggregates from an explicitly configured official JSON API."""
+    token = os.environ.get("IVAS_OFFICIAL_API_TOKEN", "").strip()
+    url = os.environ.get("IVAS_AVAILABILITY_URL", "").strip()
+    if not token or not url:
+        return jsonify(success=False, code="not_configured",
+                       message="Rəsmi IVAS mövcudluq API ünvanı və açarı təyin edilməyib.", ranges=[]), 503
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if parsed.scheme != "https" or parsed.username or parsed.password or host not in ("ivasms.com", "www.ivasms.com", "api.ivasms.com") or parsed.port not in (None, 443):
+        return jsonify(success=False, code="invalid_endpoint",
+                       message="Yalnız rəsmi IVAS HTTPS API ünvanı qəbul edilir.", ranges=[]), 400
+    try:
+        response = requests.get(url, headers={"Authorization": "Bearer " + token, "Accept": "application/json"},
+                                timeout=8, allow_redirects=False)
+        if response.status_code in (401, 403):
+            return jsonify(success=False, code="authentication_failed",
+                           message="API girişi rədd edildi.", ranges=[]), 502
+        if response.status_code == 429:
+            return jsonify(success=False, code="rate_limited", message="API sorğu limiti.", ranges=[]), 429
+        if response.status_code != 200:
+            return jsonify(success=False, code="upstream_error",
+                           message="API xəta statusu qaytardı.", ranges=[]), 502
+        if "application/json" not in response.headers.get("Content-Type", ""):
+            return jsonify(success=False, code="non_json", message="API JSON qaytarmadı.", ranges=[]), 502
+        payload = response.json()
+        candidates = [payload, payload.get("ranges") if isinstance(payload, dict) else None,
+                      payload.get("data") if isinstance(payload, dict) else None]
+        if isinstance(payload, dict) and isinstance(payload.get("data"), dict):
+            candidates.append(payload["data"].get("ranges"))
+        items = next((v for v in candidates if isinstance(v, list)), None)
+        if items is None:
+            return jsonify(success=False, code="unexpected_response",
+                           message="Diapazon formatı tanınmadı.", ranges=[]), 502
+        ranges = []
+        for item in items[:500]:
+            if not isinstance(item, dict):
+                continue
+            # Do not expose phone numbers or arbitrary upstream records.
+            country = str(item.get("country_name") or item.get("country") or "").strip()[:80]
+            service = str(item.get("service_name") or item.get("service") or "").strip()[:80]
+            count = item.get("available_count")
+            count = count if type(count) is int and 0 <= count <= 10000000 else None
+            if country or service:
+                ranges.append({"country": country, "service": service, "available_count": count})
+        return jsonify(success=True, ranges=ranges, count=len(ranges))
+    except (requests.RequestException, ValueError):
+        return jsonify(success=False, code="connection_error",
+                       message="Rəsmi API-dən etibarlı cavab alınmadı.", ranges=[]), 502
 
 @app.get("/")
 def home():
@@ -40,8 +95,8 @@ button{background:#397aff;color:white;border:0;padding:12px 20px;border-radius:1
 <div class="grid"><section class="card"><h2>🌐 Server</h2><strong id="server">Yoxlanılır…</strong></section>
 <section class="card"><h2>🔐 Rəsmi API konfiqurasiyası</h2><strong id="api">Yoxlanılır…</strong></section></div>
 <div class="note">Təhlükəsizlik səbəbindən bu panel SMS mətnlərini, OTP kodlarını və üçüncü tərəf sessiya kukilərini göstərmir. Rəsmi API dokumentasiyası olmadan nömrə mövcudluğu barədə məlumat uydurulmur.</div>
-<button id="refresh">Yenilə</button><p id="message" role="status"></p></main>
-<script>async function refresh(){document.getElementById('message').textContent='Yoxlanılır…';try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('Server cavab vermir');const d=await r.json();document.getElementById('server').textContent=d.online?'✅ Aktiv':'⚠️ Bağlı';document.getElementById('api').textContent=d.official_api_configured?'Açar mövcuddur':'Rəsmi API açarı yoxdur';document.getElementById('message').textContent='Status yeniləndi.'}catch(e){document.getElementById('server').textContent='Xəta';document.getElementById('message').textContent='Bağlantı alınmadı.'}}document.getElementById('refresh').addEventListener('click',refresh);refresh()</script>
+<section class="card" style="margin-top:20px"><h2>🌍 Mövcud ölkə və xidmətlər</h2><p id="availabilityStatus">API yoxlanılır…</p><div id="availabilityList"></div></section><button id="refresh" style="margin-top:20px">Yenilə</button><p id="message" role="status"></p></main>
+<script>async function refresh(){document.getElementById('message').textContent='Yoxlanılır…';try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('Server cavab vermir');const d=await r.json();document.getElementById('server').textContent=d.online?'✅ Aktiv':'⚠️ Bağlı';document.getElementById('api').textContent=d.official_api_configured?'Açar mövcuddur':'Rəsmi API açarı yoxdur';document.getElementById('message').textContent='Status yeniləndi.';await showAvailability()}catch(e){document.getElementById('server').textContent='Xəta';document.getElementById('message').textContent='Bağlantı alınmadı.'}}async function showAvailability(){const state=document.getElementById('availabilityStatus'),list=document.getElementById('availabilityList');list.replaceChildren();try{const r=await fetch('/api/availability',{cache:'no-store'}),d=await r.json();if(!r.ok||!d.success){state.textContent=d.message||'Məlumat alınmadı';return}state.textContent=d.ranges.length?d.ranges.length+' xidmət/ölkə qeydi tapıldı.':'API boş mövcudluq siyahısı qaytardı.';for(const x of d.ranges){const row=document.createElement('p');row.textContent=(x.country||'Ölkə göstərilməyib')+' — '+(x.service||'Xidmət göstərilməyib')+(x.available_count===null?'':' · Mövcud: '+x.available_count);list.appendChild(row)}}catch{state.textContent='Mövcudluq yoxlanışı uğursuz oldu.'}}document.getElementById('refresh').addEventListener('click',refresh);refresh()</script>
 </body></html>""", mimetype="text/html")
 
 if __name__ == "__main__":

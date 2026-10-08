@@ -1,0 +1,48 @@
+"""Independent, safe IVAS SMS dashboard (no messages, numbers or OTP exposure)."""
+import os
+from datetime import datetime, timezone
+from flask import Flask, jsonify, Response
+
+app = Flask(__name__)
+app.config["JSON_SORT_KEYS"] = False
+
+@app.get("/health")
+def health():
+    return jsonify(status="ok")
+
+@app.get("/api/status")
+def status():
+    return jsonify(
+        online=True,
+        separate=True,
+        provider="IVAS SMS",
+        official_api_configured=bool(os.environ.get("IVAS_OFFICIAL_API_TOKEN")),
+        sms_content_enabled=False,
+        checked_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+@app.get("/")
+def home():
+    return Response("""<!DOCTYPE html>
+<html lang="az"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>IVAS SMS — Veb panel</title><style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#0a1220;color:#ecf3ff}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top,#17365c,#0a1220 65%);min-height:100vh}
+main{max-width:950px;margin:0 auto;padding:34px 16px}.brand{display:flex;align-items:center;gap:12px;font-weight:800}
+.logo{background:#216ef0;padding:13px;border-radius:14px}h1{font-size:clamp(25px,5vw,38px);margin-top:30px}
+p{color:#b3c4da;line-height:1.65}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+.card{background:#13223a;border:1px solid #2b4568;border-radius:18px;padding:23px}.card h2{font-size:16px}
+strong{font-size:22px;display:block;padding-top:8px}.note{margin:18px 0;padding:17px;border:1px solid #4f6381;background:#182f4c;border-radius:12px}
+button{background:#397aff;color:white;border:0;padding:12px 20px;border-radius:10px;font-weight:bold;cursor:pointer}
+@media(max-width:580px){.grid{grid-template-columns:1fr}}</style></head><body>
+<main><div class="brand"><div class="logo">📡</div><div>IVAS SMS<small style="display:block;color:#93accb;font-weight:normal">Ayrıca veb idarəetmə paneli</small></div></div>
+<h1>İdarə paneli</h1><p>Bu sayt Telegram botundan və əvvəlki LAMIX layihəsindən ayrıdır.</p>
+<div class="grid"><section class="card"><h2>🌐 Server</h2><strong id="server">Yoxlanılır…</strong></section>
+<section class="card"><h2>🔐 Rəsmi API konfiqurasiyası</h2><strong id="api">Yoxlanılır…</strong></section></div>
+<div class="note">Təhlükəsizlik səbəbindən bu panel SMS mətnlərini, OTP kodlarını və üçüncü tərəf sessiya kukilərini göstərmir. Rəsmi API dokumentasiyası olmadan nömrə mövcudluğu barədə məlumat uydurulmur.</div>
+<button id="refresh">Yenilə</button><p id="message" role="status"></p></main>
+<script>async function refresh(){document.getElementById('message').textContent='Yoxlanılır…';try{const r=await fetch('/api/status',{cache:'no-store'});if(!r.ok)throw Error('Server cavab vermir');const d=await r.json();document.getElementById('server').textContent=d.online?'✅ Aktiv':'⚠️ Bağlı';document.getElementById('api').textContent=d.official_api_configured?'Açar mövcuddur':'Rəsmi API açarı yoxdur';document.getElementById('message').textContent='Status yeniləndi.'}catch(e){document.getElementById('server').textContent='Xəta';document.getElementById('message').textContent='Bağlantı alınmadı.'}}document.getElementById('refresh').addEventListener('click',refresh);refresh()</script>
+</body></html>""", mimetype="text/html")
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "10000")), debug=False)

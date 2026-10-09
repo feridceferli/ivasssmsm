@@ -138,6 +138,9 @@ def sms_stats():
 
     upstream_url = os.environ.get("IVAS_SMS_STATS_URL", "").strip()
     token = os.environ.get("IVAS_OFFICIAL_API_TOKEN", "").strip()
+    if not token and not upstream_url:
+        return jsonify(success=False, code="portal_cookie_not_configured",
+                       message="Göndərdiyin IVAS kodu üçün Render-də COOKIES_JSON sessiyası tələb olunur."), 503
     if not token or not upstream_url:
         return jsonify(success=False, code="stats_not_configured",
                        message="IVAS_SMS_STATS_URL və IVAS_OFFICIAL_API_TOKEN tələb olunur."), 503

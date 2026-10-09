@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="az"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#081325"><meta name="robots" content="noindex,nofollow">
+<title>IVAS SMS — SMS idarəetməsi</title>
+<style>
+:root{color-scheme:dark;--bg:#081120;--panel:#111f37;--border:#2b405d;--text:#ecf4ff;--muted:#96acca;--cyan:#52cbe7;--blue:#4488ff;--warn:#f6c77e;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at 65% -10%,#183662,transparent 60%),var(--bg);color:var(--text);min-height:100vh}
+.wrapper{max-width:1150px;margin:auto;padding:24px clamp(15px,4vw,38px) 45px}header{display:flex;align-items:center;justify-content:space-between;gap:15px;flex-wrap:wrap;padding-bottom:25px;border-bottom:1px solid var(--border)}
+.logo{display:flex;align-items:center;gap:12px;font-weight:850}.mark{display:grid;place-items:center;width:48px;height:48px;border-radius:15px;background:linear-gradient(135deg,#346bde,#23c1c8);font-size:23px}.sub,.muted{color:var(--muted)}.sub{font-weight:500;font-size:12px;margin-top:4px}
+a{color:#a2c5ff}nav{display:flex;align-items:center;gap:12px;flex-wrap:wrap}nav a{font-size:13px;text-decoration:none;border:1px solid var(--border);padding:9px 13px;border-radius:10px;background:#162845}
+h1{font-size:clamp(26px,4vw,37px);margin:27px 0 7px;letter-spacing:-.6px}h2{font-size:17px;margin:0 0 15px}p{line-height:1.6}
+.intro{max-width:750px;margin:0 0 23px}.panel{background:linear-gradient(145deg,#152640,#0e1b2e);border:1px solid var(--border);border-radius:18px;padding:23px;margin-bottom:17px}
+.auth-row{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.field{min-width:210px;flex:1}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:8px}
+input{background:#091528;color:var(--text);border:1px solid #3a5275;border-radius:10px;padding:13px;width:100%;font:inherit}
+input:focus-visible,button:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+button{border:0;color:white;background:var(--blue);padding:13px 19px;border-radius:10px;font:inherit;font-weight:700;cursor:pointer}button.secondary{background:#243b5c;border:1px solid #3a567b}button:disabled{opacity:.6;cursor:wait}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:13px;margin-bottom:18px}.metric{background:#122139;border:1px solid var(--border);border-radius:15px;padding:18px}.metric span{font-size:12px;color:var(--muted)}.metric strong{display:block;font-size:clamp(22px,3vw,31px);margin-top:15px}.metric small{color:#89afd6}
+.row{display:grid;grid-template-columns:1.2fr 1fr;gap:16px}.status-list{display:grid;gap:13px}.status-line{display:flex;gap:12px;justify-content:space-between;border-bottom:1px solid var(--border);padding:11px 0;font-size:13px}.status-line:last-child{border:0}.state{font-weight:700;color:#70d7ae}.state.off{color:var(--warn)}
+.notice{background:#173457;border:1px solid #345c87;color:#d1e6ff;padding:13px 16px;border-radius:12px;font-size:13px;line-height:1.6;margin:12px 0}.notice.warn{background:#393021;border-color:#735936;color:#f2d4a2}
+table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:12px 8px;text-align:left;border-bottom:1px solid var(--border);word-break:break-word}th{color:#94b0d2;font-size:11px}tr:last-child td{border-bottom:0}.table-wrap{overflow:auto}
+.footer{margin-top:24px;color:#7790b1;font-size:12px}
+@media(max-width:850px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}.row{grid-template-columns:1fr}}
+@media(max-width:470px){.wrapper{padding:18px 13px 30px}.grid{gap:9px}.metric{padding:13px}.panel{padding:16px}.auth-row button{width:100%}}
+</style></head>
+<body><div class="wrapper">
+<header><div class="logo"><div class="mark">📡</div><div>IVAS SMS PANEL<div class="sub">ŞƏXSİ SMS MONİTOR • WEB</div></div></div>
+<nav><a href="/">⌂ Əsas panel</a><a href="/api/v1">API sənədləri</a></nav></header>
+<main><h1>SMS idarəetməsi</h1><p class="muted intro">Botuna bənzər müstəqil idarəetmə. Rəsmi API tərəfindən təqdim edilən ümumi SMS statistikası və ölkə/xidmət mövcudluğu burada yoxlanılır.</p>
+<section class="panel"><h2>🔐 Şəxsi API girişi</h2><div class="auth-row"><div class="field"><label for="apiKey">IVAS_PRIVATE_API_KEY</label><input type="password" id="apiKey" placeholder="Şəxsi API açarını daxil et" autocomplete="off" spellcheck="false"></div><button id="connect">Qoşul və yenilə</button><button id="disconnect" class="secondary">Çıxış</button></div><p class="muted" style="font-size:12px;margin-bottom:0">Açar yalnız bu səhifə açıq olduğu müddətdə yadda saxlanılır, brauzer yaddaşına və URL-ə yazılmır. Serverə HTTPS başlığı ilə göndərilir.</p><p id="authStatus" role="status" class="notice">Şəxsi API açarı ilə qoşul.</p></section>
+<div class="grid">
+ <div class="metric"><span>📨 Ümumi SMS sayı</span><strong id="total">—</strong><small>API statistikası</small></div>
+ <div class="metric"><span>✅ Ödənilmiş SMS</span><strong id="paid">—</strong><small>API statistikası</small></div>
+ <div class="metric"><span>🕒 Ödənilməmiş SMS</span><strong id="unpaid">—</strong><small>API statistikası</small></div>
+ <div class="metric"><span>💰 Gəlir</span><strong id="revenue">—</strong><small>Valyuta API tərəfindən bildirilməlidir</small></div>
+</div>
+<div class="row">
+<section class="panel"><h2>📊 SMS monitoru</h2><div id="statsNotice" class="notice">Şəxsi API-yə qoşulduqdan sonra statistika yoxlanılacaq.</div><div class="status-list">
+<div class="status-line"><span>Monitor növü</span><strong>Yalnız ümumi saylar</strong></div>
+<div class="status-line"><span>Son yenilənmə</span><strong id="lastCheck">—</strong></div>
+<div class="status-line"><span>SMS mətnləri və OTP</span><strong>Göstərilmir</strong></div>
+</div></section>
+<section class="panel"><h2>⚙️ API vəziyyəti</h2><div class="status-list">
+<div class="status-line"><span>IVAS şəxsi API</span><strong id="privateState" class="state off">Qoşulmayıb</strong></div>
+<div class="status-line"><span>Rəsmi API açarı</span><strong id="officialState">—</strong></div>
+<div class="status-line"><span>SMS statistika endpoint-i</span><strong id="statsState">—</strong></div>
+<div class="status-line"><span>Ölkə/xidmət endpoint-i</span><strong id="rangesState">—</strong></div>
+</div></section>
+</div>
+<section class="panel"><h2>🌍 Mövcud xidmət və ölkələr</h2><p id="rangesNotice" class="notice">Mövcudluq hələ yoxlanılmayıb.</p><div class="table-wrap"><table><thead><tr><th>Ölkə</th><th>Xidmət</th><th>Mövcudluq sayı</th></tr></thead><tbody id="rangeRows"><tr><td colspan="3">Məlumat gözlənilir</td></tr></tbody></table></div></section>
+<p class="footer">Bu panel Telegram botundan ayrıca işləyir. Yalnız təsdiqlənmiş rəsmi API statistikası göstərilir; boş məlumatlar sıfır kimi təqdim edilmir.</p></main></div>
+<script>
+(()=>{'use strict';
+const el=id=>document.getElementById(id);let secret='';let busy=false;
+const hdr=()=>({'X-API-Key':secret,'Accept':'application/json'});
+const format=n=>n===null||n===undefined?'—':String(n);
+function info(id,msg,warn=false){const node=el(id);node.textContent=msg;node.className='notice'+(warn?' warn':'')}
+function reset(){['total','paid','unpaid','revenue','lastCheck'].forEach(id=>el(id).textContent='—');['officialState','statsState','rangesState'].forEach(id=>el(id).textContent='—');el('privateState').textContent='Qoşulmayıb';el('privateState').className='state off';el('rangeRows').replaceChildren()}
+async function load(url){const r=await fetch(url,{headers:hdr(),cache:'no-store'});let d;try{d=await r.json()}catch{throw Error('Server JSON cavabı qaytarmadı')}if(!r.ok||d.success===false)throw Error(d.message||d.error||'HTTP '+r.status);return d}
+async function refresh(){
+if(!secret||busy)return;busy=true;el('connect').disabled=true;reset();
+try{
+ const health=await load('/api/v1/sms/status');el('privateState').textContent='✅ Aktiv';el('privateState').className='state';
+ el('officialState').textContent=health.upstream_api_configured?'✅ Təyin edilib':'⚠️ Yoxdur';
+ el('statsState').textContent=health.stats_endpoint_configured?'✅ Təyin edilib':'⚠️ Yoxdur';
+ el('rangesState').textContent=health.availability_endpoint_configured?'✅ Təyin edilib':'⚠️ Yoxdur';
+ info('authStatus','✅ Şəxsi API bağlantısı quruldu.');
+ const jobs=await Promise.allSettled([load('/api/v1/sms/stats'),load('/api/v1/ranges')]);
+ const stat=jobs[0];if(stat.status==='fulfilled'){
+  const x=stat.value.stats||{};el('total').textContent=format(x.total_sms);el('paid').textContent=format(x.paid_sms);el('unpaid').textContent=format(x.unpaid_sms);el('revenue').textContent=format(x.revenue);el('lastCheck').textContent=new Date().toLocaleTimeString('az-AZ');info('statsNotice','✅ Ümumi SMS statistikası API-dən alındı.')
+ }else{info('statsNotice','⚠️ '+(stat.reason?.message||'Statistika alınmadı'),true)}
+ const range=jobs[1];if(range.status==='fulfilled'){
+  const arr=range.value.ranges||[];info('rangesNotice',arr.length?arr.length+' ölkə/xidmət qeydi alındı.':'Rəsmi API boş mövcudluq siyahısı qaytardı.',!arr.length);
+  const tb=el('rangeRows');tb.replaceChildren();if(!arr.length){const tr=document.createElement('tr'),td=document.createElement('td');td.colSpan=3;td.textContent='Mövcud diapazon bildirilməyib.';tr.append(td);tb.append(tr)}
+  for(const r of arr){const tr=document.createElement('tr');for(const value of [r.country||'—',r.service||'—',format(r.available_count)]){const td=document.createElement('td');td.textContent=value;tr.append(td)}tb.append(tr)}
+ }else{info('rangesNotice','⚠️ '+(range.reason?.message||'Mövcudluq alınmadı'),true)}
+}catch(e){info('authStatus','⚠️ '+(e.message||'Bağlantı alınmadı'),true)}finally{busy=false;el('connect').disabled=false}
+}
+el('connect').addEventListener('click',()=>{const v=el('apiKey').value.trim();if(v)secret=v;el('apiKey').value='';refresh()});
+el('apiKey').addEventListener('keydown',e=>{if(e.key==='Enter')el('connect').click()});
+el('disconnect').addEventListener('click',()=>{secret='';el('apiKey').value='';reset();info('authStatus','Şəxsi API açarı ilə qoşul.');info('statsNotice','Şəxsi API-yə qoşulduqdan sonra statistika yoxlanılacaq.');info('rangesNotice','Mövcudluq hələ yoxlanılmayıb.')});
+})();
+</script></body></html>

@@ -6,9 +6,11 @@ import requests
 import hmac
 from datetime import datetime, timezone
 from flask import Flask, jsonify, Response, request
+from sms_monitor import sms_bp
 
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
+app.register_blueprint(sms_bp)
 
 @app.get("/health")
 def health():
@@ -115,7 +117,9 @@ def private_api_docs():
     return jsonify(name="IVAS private API", version="v1",
                    auth="X-API-Key header or Authorization: Bearer <private-key>",
                    routes={"GET /api/v1/status": "Status metadata (key required)",
-                           "GET /api/v1/ranges": "Country/service availability metadata (key required)"},
+                           "GET /api/v1/ranges": "Country/service availability metadata (key required)",
+                           "GET /api/v1/sms/status": "Official SMS stats integration status (key required)",
+                           "GET /api/v1/sms/stats": "Aggregate SMS counts only (key required)"},
                    note="Does not expose individual phone numbers, SMS messages, OTPs or cookies.")
 
 
@@ -134,7 +138,7 @@ strong{font-size:22px;display:block;padding-top:8px}.note{margin:18px 0;padding:
 button{background:#397aff;color:white;border:0;padding:12px 20px;border-radius:10px;font-weight:bold;cursor:pointer}
 @media(max-width:580px){.grid{grid-template-columns:1fr}}</style></head><body>
 <main><div class="brand"><div class="logo">📡</div><div>IVAS SMS<small style="display:block;color:#93accb;font-weight:normal">Ayrıca veb idarəetmə paneli</small></div></div>
-<h1>İdarə paneli</h1><p><a href="/api/v1" style="color:#94bdff">🔗 Şəxsi API sənədləri</a></p><p>Bu sayt Telegram botundan və əvvəlki LAMIX layihəsindən ayrıdır.</p>
+<h1>İdarə paneli</h1><p><a href="/sms-dashboard" style="display:inline-block;background:#2870ee;color:white;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:bold">📨 SMS İDARƏETMƏSİ →</a></p><p><a href="/api/v1" style="color:#94bdff">🔗 Şəxsi API sənədləri</a></p><p>Bu sayt Telegram botundan və əvvəlki LAMIX layihəsindən ayrıdır.</p>
 <div class="grid"><section class="card"><h2>🌐 Server</h2><strong id="server">Yoxlanılır…</strong></section>
 <section class="card"><h2>🔐 Rəsmi API konfiqurasiyası</h2><strong id="api">Yoxlanılır…</strong></section></div>
 <div class="note">Təhlükəsizlik səbəbindən bu panel SMS mətnlərini, OTP kodlarını və üçüncü tərəf sessiya kukilərini göstərmir. Rəsmi API dokumentasiyası olmadan nömrə mövcudluğu barədə məlumat uydurulmur.</div>
@@ -143,4 +147,6 @@ button{background:#397aff;color:white;border:0;padding:12px 20px;border-radius:1
 </body></html>""", mimetype="text/html")
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", "10000")), debug=False)
+    # Render start command is python safe_app.py; hand off to production WSGI.
+    os.execvp("gunicorn", ["gunicorn", "--bind", "0.0.0.0:" + os.environ.get("PORT", "10000"),
+                           "--workers", "2", "--threads", "2", "--timeout", "40", "safe_app:app"])

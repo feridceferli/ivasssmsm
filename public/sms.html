@@ -25,7 +25,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:12px 8px;
 <body><div class="wrapper">
 <header><div class="logo"><div class="mark">📡</div><div>IVAS SMS PANEL<div class="sub">ŞƏXSİ SMS MONİTOR • WEB</div></div></div>
 <nav><a href="/">⌂ Əsas panel</a><a href="/api/v1">API sənədləri</a></nav></header>
-<main><h1>SMS idarəetməsi</h1><p class="muted intro">Botuna bənzər müstəqil idarəetmə. Rəsmi API tərəfindən təqdim edilən ümumi SMS statistikası və ölkə/xidmət mövcudluğu burada yoxlanılır.</p>
+<main><h1>SMS idarəetməsi</h1><p class="muted intro">Botuna bənzər müstəqil idarəetmə. Göndərdiyin orijinal IVAS sistemindəki sessiya kukiləri və CSRF üsulu ilə yalnız ümumi SMS statistikası yoxlanılır. Köhnə sessiya etibarsızdırsa, yenisi lazımdır.</p>
 <section class="panel"><h2>🔐 Şəxsi API girişi</h2><div class="auth-row"><div class="field"><label for="apiKey">IVAS_PRIVATE_API_KEY</label><input type="password" id="apiKey" placeholder="Şəxsi API açarını daxil et" autocomplete="off" spellcheck="false"></div><button id="connect">Qoşul və yenilə</button><button id="disconnect" class="secondary">Çıxış</button></div><p class="muted" style="font-size:12px;margin-bottom:0">Açar yalnız bu səhifə açıq olduğu müddətdə yadda saxlanılır, brauzer yaddaşına və URL-ə yazılmır. Serverə HTTPS başlığı ilə göndərilir.</p><p id="authStatus" role="status" class="notice">Şəxsi API açarı ilə qoşul.</p></section>
 <div class="grid">
  <div class="metric"><span>📨 Ümumi SMS sayı</span><strong id="total">—</strong><small>API statistikası</small></div>
@@ -33,6 +33,7 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:12px 8px;
  <div class="metric"><span>🕒 Ödənilməmiş SMS</span><strong id="unpaid">—</strong><small>API statistikası</small></div>
  <div class="metric"><span>💰 Gəlir</span><strong id="revenue">—</strong><small>Valyuta API tərəfindən bildirilməlidir</small></div>
 </div>
+<section class="panel"><div class="auth-row"><div class="field"><label for="statsDate">📅 Statistika tarixi (istəyə bağlı)</label><input type="date" id="statsDate" aria-label="Statistika tarixi"></div><div class="field"><p class="muted">Tarix seçilməzsə, Azərbaycan vaxtı ilə cari gün yoxlanılır.</p></div></div></section>
 <div class="row">
 <section class="panel"><h2>📊 SMS monitoru</h2><div id="statsNotice" class="notice">Şəxsi API-yə qoşulduqdan sonra statistika yoxlanılacaq.</div><div class="status-list">
 <div class="status-line"><span>Monitor növü</span><strong>Yalnız ümumi saylar</strong></div>
@@ -41,13 +42,13 @@ table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:12px 8px;
 </div></section>
 <section class="panel"><h2>⚙️ API vəziyyəti</h2><div class="status-list">
 <div class="status-line"><span>IVAS şəxsi API</span><strong id="privateState" class="state off">Qoşulmayıb</strong></div>
-<div class="status-line"><span>Rəsmi API açarı</span><strong id="officialState">—</strong></div>
-<div class="status-line"><span>SMS statistika endpoint-i</span><strong id="statsState">—</strong></div>
+<div class="status-line"><span>IVAS portal sessiyası (COOKIES_JSON)</span><strong id="officialState">—</strong></div>
+<div class="status-line"><span>SMS statistikası mənbəyi</span><strong id="statsState">—</strong></div>
 <div class="status-line"><span>Ölkə/xidmət endpoint-i</span><strong id="rangesState">—</strong></div>
 </div></section>
 </div>
 <section class="panel"><h2>🌍 Mövcud xidmət və ölkələr</h2><p id="rangesNotice" class="notice">Mövcudluq hələ yoxlanılmayıb.</p><div class="table-wrap"><table><thead><tr><th>Ölkə</th><th>Xidmət</th><th>Mövcudluq sayı</th></tr></thead><tbody id="rangeRows"><tr><td colspan="3">Məlumat gözlənilir</td></tr></tbody></table></div></section>
-<p class="footer">Bu panel Telegram botundan ayrıca işləyir. Yalnız təsdiqlənmiş rəsmi API statistikası göstərilir; boş məlumatlar sıfır kimi təqdim edilmir.</p></main></div>
+<p class="footer">Bu panel Telegram botundan ayrıca işləyir. IVAS portalının ümumi statistikaları və varsa rəsmi mövcudluq API-si göstərilir. SMS mətnləri, kodlar və fərdi nömrələr açıqlanmır.</p></main></div>
 <script>
 (()=>{'use strict';
 const el=id=>document.getElementById(id);let secret='';let busy=false;
@@ -60,13 +61,15 @@ async function refresh(){
 if(!secret||busy)return;busy=true;el('connect').disabled=true;reset();
 try{
  const health=await load('/api/v1/sms/status');el('privateState').textContent='✅ Aktiv';el('privateState').className='state';
- el('officialState').textContent=health.upstream_api_configured?'✅ Təyin edilib':'⚠️ Yoxdur';
- el('statsState').textContent=health.stats_endpoint_configured?'✅ Təyin edilib':'⚠️ Yoxdur';
+ el('officialState').textContent=health.portal_session_configured?'✅ Render-də var':'⚠️ Render-də yoxdur';
+ el('statsState').textContent=health.portal_session_configured?'Portal sessiyası / CSRF':health.stats_endpoint_configured?'Rəsmi API':'⚠️ Konfiqurasiya edilməyib';
  el('rangesState').textContent=health.availability_endpoint_configured?'✅ Təyin edilib':'⚠️ Yoxdur';
  info('authStatus','✅ Şəxsi API bağlantısı quruldu.');
- const jobs=await Promise.allSettled([load('/api/v1/sms/stats'),load('/api/v1/ranges')]);
+ const chosen=el('statsDate').value;const dateParam=chosen?'?date='+encodeURIComponent(chosen.split('-').reverse().join('/')):'';
+ const availability=health.availability_endpoint_configured?load('/api/v1/ranges'):Promise.reject(new Error('Ölkə və xidmət siyahısı üçün ayrıca rəsmi mövcudluq API-si tələb olunur.'));
+ const jobs=await Promise.allSettled([load('/api/v1/sms/stats'+dateParam),availability]);
  const stat=jobs[0];if(stat.status==='fulfilled'){
-  const x=stat.value.stats||{};el('total').textContent=format(x.total_sms);el('paid').textContent=format(x.paid_sms);el('unpaid').textContent=format(x.unpaid_sms);el('revenue').textContent=format(x.revenue);el('lastCheck').textContent=new Date().toLocaleTimeString('az-AZ');info('statsNotice','✅ Ümumi SMS statistikası API-dən alındı.')
+  const x=stat.value.stats||{};el('total').textContent=format(x.total_sms);el('paid').textContent=format(x.paid_sms);el('unpaid').textContent=format(x.unpaid_sms);el('revenue').textContent=format(x.revenue);el('lastCheck').textContent=new Date().toLocaleTimeString('az-AZ');info('statsNotice','✅ Ümumi SMS statistikası '+(stat.value.source==='ivas_portal_aggregates'?'IVAS portal sessiyasından':'rəsmi API-dən')+' alındı.')
  }else{info('statsNotice','⚠️ '+(stat.reason?.message||'Statistika alınmadı'),true)}
  const range=jobs[1];if(range.status==='fulfilled'){
   const arr=range.value.ranges||[];info('rangesNotice',arr.length?arr.length+' ölkə/xidmət qeydi alındı.':'Rəsmi API boş mövcudluq siyahısı qaytardı.',!arr.length);

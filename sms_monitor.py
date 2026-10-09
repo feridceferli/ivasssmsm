@@ -1,6 +1,6 @@
-"""Read-only, private SMS aggregate statistics from a documented official IVAS endpoint.
+"""Read-only, private SMS aggregate statistics via original IVAS portal session or official API.
 
-Never requests or serves individual phone numbers, messages, login cookies, or OTP codes.
+Never serves individual phone numbers, messages, login cookies, or OTP codes.
 """
 import hmac
 import json
@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 
 import requests
 from flask import Blueprint, jsonify, request, send_from_directory
+from portal_summary import PortalSummaryError, fetch_portal_summary
 
 sms_bp = Blueprint("sms_monitor", __name__)
 ALLOWED_HOSTS = frozenset(("ivasms.com", "www.ivasms.com", "api.ivasms.com"))
@@ -107,7 +108,10 @@ def sms_status():
     error = _private_auth()
     if error is not None:
         return error
+    portal_configured = bool(os.environ.get("COOKIES_JSON", "").strip())
     return jsonify(success=True, provider="IVAS SMS", monitor="read_only_aggregates",
+                   source="ivas_portal_session" if portal_configured else "official_api" if os.environ.get("IVAS_SMS_STATS_URL") else "not_configured",
+                   portal_session_configured=portal_configured,
                    upstream_api_configured=bool(os.environ.get("IVAS_OFFICIAL_API_TOKEN")),
                    stats_endpoint_configured=bool(os.environ.get("IVAS_SMS_STATS_URL")),
                    availability_endpoint_configured=bool(os.environ.get("IVAS_AVAILABILITY_URL")),
@@ -119,6 +123,19 @@ def sms_stats():
     error = _private_auth()
     if error is not None:
         return error
+    # The user's original project uses COOKIES_JSON -> authenticated portal
+    # -> CSRF form -> aggregate HTML statistics, not an official Bearer API.
+    # No login bypasses and no SMS/OTP records are returned.
+    if os.environ.get("COOKIES_JSON", "").strip():
+        try:
+            summary = fetch_portal_summary(request.args.get("date"))
+            return jsonify(success=True, stats=summary["stats"], date=summary["date"],
+                           checked_at=datetime.now(timezone.utc).isoformat(),
+                           source=summary["source"])
+        except PortalSummaryError as exc:
+            status = 400 if exc.code == "invalid_date" else 502
+            return jsonify(success=False, code=exc.code, message=exc.message), status
+
     upstream_url = os.environ.get("IVAS_SMS_STATS_URL", "").strip()
     token = os.environ.get("IVAS_OFFICIAL_API_TOKEN", "").strip()
     if not token or not upstream_url:
